@@ -339,7 +339,116 @@ void Cleanup()
     SAFE_RELEASE(g_pd3dDevice);
     SAFE_RELEASE(g_pD3D);
 }
+void RenderPass1()
+{
+    HRESULT hr;
 
+    // 現在の RT0 を保存（後で復帰）
+    LPDIRECT3DSURFACE9 oldRT0 = NULL;
+    hr = g_pd3dDevice->GetRenderTarget(0, &oldRT0);
+    assert(hr == S_OK);
+
+    // MRT 用のレンダーターゲット（RT0:カラー, RT1:深度(0..1)）を取得
+    LPDIRECT3DSURFACE9 rtColor = NULL;
+    LPDIRECT3DSURFACE9 rtDepth01 = NULL;
+    hr = g_pRenderTarget->GetSurfaceLevel(0, &rtColor);     assert(hr == S_OK);
+    hr = g_pRenderTarget2->GetSurfaceLevel(0, &rtDepth01);  assert(hr == S_OK);
+
+    // デプスステンシル（AutoDepthStencil）を取得してバインド
+    LPDIRECT3DSURFACE9 ds = NULL;
+    hr = g_pd3dDevice->GetDepthStencilSurface(&ds);         assert(hr == S_OK);
+    hr = g_pd3dDevice->SetDepthStencilSurface(ds);          assert(hr == S_OK);
+
+    // MRT をセット
+    hr = g_pd3dDevice->SetRenderTarget(0, rtColor);         assert(hr == S_OK);
+    hr = g_pd3dDevice->SetRenderTarget(1, rtDepth01);       assert(hr == S_OK);
+
+    // クリア（カラー＋Z）
+    hr = g_pd3dDevice->Clear(0, NULL,
+                             D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+                             D3DCOLOR_XRGB(60, 60, 90),
+                             1.0f, 0);
+    assert(hr == S_OK);
+
+    // カメラ行列（簡単な周回）
+    float t = GetTickCount() * (1.0f / 1000.0f);
+    D3DXMATRIX View, Proj;
+    {
+        D3DXVECTOR3 eye(10.0f * sinf(0.5f * t), 6.0f, -10.0f * cosf(0.5f * t));
+        D3DXVECTOR3 at(0, 0, 0);
+        D3DXVECTOR3 up(0, 1, 0);
+        D3DXMatrixLookAtLH(&View, &eye, &at, &up);
+
+        D3DXMatrixPerspectiveFovLH(&Proj,
+                                   D3DXToRadian(45.0f),
+                                   640.0f / 480.0f,
+                                   0.5f,
+                                   1000.0f);
+    }
+
+    // 描画開始
+    hr = g_pd3dDevice->BeginScene();                         assert(hr == S_OK);
+
+    // MRT 用テクニック
+    hr = g_pEffect1->SetTechnique("TechniqueMRT");           assert(hr == S_OK);
+
+    // テクスチャ使用フラグ（エフェクト側にある場合）
+    g_pEffect1->SetBool("g_bUseTexture", TRUE);
+
+    UINT nPass = 0;
+    hr = g_pEffect1->Begin(&nPass, 0);                       assert(hr == S_OK);
+    hr = g_pEffect1->BeginPass(0);                           assert(hr == S_OK);
+
+    // ====== グリッド配置で複数描画 ======
+    const int   gridN = 7;      // 7x7 = 49個
+    const float spacing = 3.5f;   // 間隔
+    for (int gz = -gridN / 2; gz <= gridN / 2; ++gz)
+    {
+        for (int gx = -gridN / 2; gx <= gridN / 2; ++gx)
+        {
+            // ワールド行列：回転＋平行移動
+            D3DXMATRIX rotY, trans, world, wvp;
+            D3DXMatrixRotationY(&rotY, 0.6f * t + 0.2f * float(gx + gz));
+            D3DXMatrixTranslation(&trans,
+                                  gx * spacing,
+                                  0.0f,
+                                  gz * spacing);
+            world = rotY * trans;
+
+            // WVP をセット
+            wvp = world * View * Proj;
+            hr = g_pEffect1->SetMatrix("g_matWorldViewProj", &wvp); assert(hr == S_OK);
+
+            // メッシュの全サブセットを描画（マテリアル/テクスチャ適用）
+            for (DWORD i = 0; i < g_dwNumMaterials; ++i)
+            {
+                g_pd3dDevice->SetMaterial(&g_pMaterials[i]);           // 使っていなければ無害
+                g_pEffect1->SetTexture("texture1", g_pTextures[i]);    // テクスチャ
+                g_pEffect1->CommitChanges();
+
+                hr = g_pMesh->DrawSubset(i);                           assert(hr == S_OK);
+            }
+        }
+    }
+    // ===================================
+
+    hr = g_pEffect1->EndPass();                              assert(hr == S_OK);
+    hr = g_pEffect1->End();                                  assert(hr == S_OK);
+
+    hr = g_pd3dDevice->EndScene();                           assert(hr == S_OK);
+
+    // MRT を解除して RT0 を復帰
+    g_pd3dDevice->SetRenderTarget(1, NULL);
+    g_pd3dDevice->SetRenderTarget(0, oldRT0);
+
+    // 片付け
+    SAFE_RELEASE(ds);
+    SAFE_RELEASE(rtDepth01);
+    SAFE_RELEASE(rtColor);
+    SAFE_RELEASE(oldRT0);
+}
+
+/*
 void RenderPass1()
 {
     HRESULT hResult = E_FAIL;
@@ -432,6 +541,7 @@ void RenderPass1()
     SAFE_RELEASE(pRT1);
     SAFE_RELEASE(pOldRT0);
 }
+*/
 
 void RenderPass2()
 {
