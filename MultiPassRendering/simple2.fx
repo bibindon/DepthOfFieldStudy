@@ -28,7 +28,7 @@ sampler depthSampler = sampler_state
 };
 
 // DOF パラメータ
-float focalDepth = 0.95; // ピント位置（0..1）
+float focalDepth = 0.96; // ピント位置（0..1）
 float cocRange = 0.15; // |d - focalDepth| がこの値で最大ぼけ（skip=31）
 
 void VS(
