@@ -29,7 +29,7 @@ sampler depthSampler = sampler_state
 
 // DOF パラメータ
 float focalDepth = 0.96; // ピント位置（0..1）
-float cocRange = 0.025; // |d - focalDepth| がこの値で最大ぼけ（skip=31）
+float cocRange = 0.15; // |d - focalDepth| がこの値で最大ぼけ（skip=31）
 
 void VS(
     in float4 inPos : POSITION,
@@ -51,47 +51,46 @@ float4 PS(
     float coc = abs(d - focalDepth); // blur 指標
     float t = saturate(coc / max(cocRange, 1e-6)); // 0..1
     // 32 段階に量子化（0..31）
-    //float skipIdx = floor(t * 15.0 + 0.5); // 近いほど 0、遠いほど 31
-    float skipIdx = floor(t * 7.0 + 0.5); // 近いほど 0、遠いほど 31
+    float skipIdx = floor(t * 15.0 + 0.5); // 近いほど 0、遠いほど 31
     float2 step = g_texelSize * (skipIdx);
 
     float4 sum = 0.0;
     // y = -2
     sum += tex2D(colorSampler, uv + float2(-2, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, -2) * step) * 1.0;
+    sum += tex2D(colorSampler, uv + float2(-1, -2) * step) * 4.0;
+    sum += tex2D(colorSampler, uv + float2(0, -2) * step) * 6.0;
+    sum += tex2D(colorSampler, uv + float2(1, -2) * step) * 4.0;
     sum += tex2D(colorSampler, uv + float2(2, -2) * step) * 1.0;
 
     // y = -1
-    sum += tex2D(colorSampler, uv + float2(-2, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, -1) * step) * 1.0;
+    sum += tex2D(colorSampler, uv + float2(-2, -1) * step) * 4.0;
+    sum += tex2D(colorSampler, uv + float2(-1, -1) * step) * 16.0;
+    sum += tex2D(colorSampler, uv + float2(0, -1) * step) * 24.0;
+    sum += tex2D(colorSampler, uv + float2(1, -1) * step) * 16.0;
+    sum += tex2D(colorSampler, uv + float2(2, -1) * step) * 4.0;
 
     // y = 0
-    sum += tex2D(colorSampler, uv + float2(-2, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, 0) * step) * 1.0;
+    sum += tex2D(colorSampler, uv + float2(-2, 0) * step) * 6.0;
+    sum += tex2D(colorSampler, uv + float2(-1, 0) * step) * 24.0;
+    sum += tex2D(colorSampler, uv + float2(0, 0) * step) * 36.0;
+    sum += tex2D(colorSampler, uv + float2(1, 0) * step) * 24.0;
+    sum += tex2D(colorSampler, uv + float2(2, 0) * step) * 6.0;
 
     // y = +1
-    sum += tex2D(colorSampler, uv + float2(-2, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, 1) * step) * 1.0;
+    sum += tex2D(colorSampler, uv + float2(-2, 1) * step) * 4.0;
+    sum += tex2D(colorSampler, uv + float2(-1, 1) * step) * 16.0;
+    sum += tex2D(colorSampler, uv + float2(0, 1) * step) * 24.0;
+    sum += tex2D(colorSampler, uv + float2(1, 1) * step) * 16.0;
+    sum += tex2D(colorSampler, uv + float2(2, 1) * step) * 4.0;
 
     // y = +2
     sum += tex2D(colorSampler, uv + float2(-2, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, 2) * step) * 1.0;
+    sum += tex2D(colorSampler, uv + float2(-1, 2) * step) * 4.0;
+    sum += tex2D(colorSampler, uv + float2(0, 2) * step) * 6.0;
+    sum += tex2D(colorSampler, uv + float2(1, 2) * step) * 4.0;
     sum += tex2D(colorSampler, uv + float2(2, 2) * step) * 1.0;
 
-    return saturate(sum / 25.0);
+    return saturate(sum / 256.0);
 }
 
 technique Technique1
