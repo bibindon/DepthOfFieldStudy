@@ -369,7 +369,7 @@ void RenderPass1()
                                D3DXToRadian(45),
                                640.0f / 480.0f,
                                1.0f,
-                               10000.0f);
+                               100.0f);
 
     D3DXVECTOR3 eye(10 * sinf(f), 5, -10 * cosf(f));
     D3DXVECTOR3 at(0, 0, 0);
@@ -457,6 +457,7 @@ void RenderPass2()
     hResult = g_pEffect2->BeginPass(0);                     assert(hResult == S_OK);
 
     hResult = g_pEffect2->SetTexture("texture1", g_pRenderTarget); assert(hResult == S_OK);
+    hResult = g_pEffect2->SetTexture("textureDepth", g_pRenderTarget2); assert(hResult == S_OK);
     hResult = g_pEffect2->CommitChanges();                          assert(hResult == S_OK);
 
     DrawFullscreenQuad();
@@ -465,7 +466,8 @@ void RenderPass2()
     hResult = g_pEffect2->End();     assert(hResult == S_OK);
 
     // === 追加: 左上に RT1 を 1/2 スケールで表示（D3DXSPRITE） ===
-    if (g_pSprite)
+    //if (g_pSprite)
+    if (false)
     {
         hResult = g_pSprite->Begin(D3DXSPRITE_ALPHABLEND);  assert(hResult == S_OK);
 
