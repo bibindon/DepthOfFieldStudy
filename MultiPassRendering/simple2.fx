@@ -1,5 +1,5 @@
 // simple2.fx : single-pass 5x5 Gaussian blur
-// depth-driven skip (0→5x5, 1→10x10相当, 2→15x15相当)
+// depth-driven skip (0..31) where step = (skip+1) * texel
 
 float2 g_texelSize = float2(1.0 / 640.0, 1.0 / 480.0);
 
@@ -15,7 +15,7 @@ sampler colorSampler = sampler_state
     AddressV = CLAMP;
 };
 
-// 深度テクスチャ（RT1: 近=0, 遠=1 を想定）
+// 深度（RT1: 近=0, 遠=1）
 texture textureDepth;
 sampler depthSampler = sampler_state
 {
@@ -27,12 +27,9 @@ sampler depthSampler = sampler_state
     AddressV = CLAMP;
 };
 
-// 被写界深度パラメータ
-// 焦点の深度（0..1）
-float focalDepth = 0.9;
-// 焦点からのズレ |d - focalDepth| に対する2段しきい値
-// 例: 0.02 未満 → skip=0, 0.02〜0.08 → skip=1, 0.08 以上 → skip=2
-float2 cocThreshold = float2(0.01, 0.03);
+// DOF パラメータ
+float focalDepth = 0.9; // ピント位置（0..1）
+float cocRange = 0.15; // |d - focalDepth| がこの値で最大ぼけ（skip=31）
 
 void VS(
     in float4 inPos : POSITION,
@@ -44,23 +41,20 @@ void VS(
     outUV = inUV;
 }
 
-// 5x5 Gaussian カーネル（[1 4 6 4 1] の外積 / 256）
+// 5x5 Gaussian kernel = [1 4 6 4 1] ⊗ [1 4 6 4 1] / 256
 float4 PS(
     in float4 pos : POSITION,
     in float2 uv : TEXCOORD0) : COLOR
 {
-    // ---- 深度から skip を決定（0/1/2）----
-    float d = tex2D(depthSampler, uv).r; // 近=0, 遠=1（simple.fx の出力前提）
-    float coc = abs(d - focalDepth);
-    float skipIdx =
-        (coc < cocThreshold.x) ? 0.0 :
-        (coc < cocThreshold.y) ? 4.0 : 16.0;
-
-    // サンプリング間隔 = (skip+1) * texel
+    // ---- 深度→skip(0..31) ----
+    float d = tex2D(depthSampler, uv).r; // 近=0, 遠=1
+    float coc = abs(d - focalDepth); // blur 指標
+    float t = saturate(coc / max(cocRange, 1e-6)); // 0..1
+    // 32 段階に量子化（0..31）
+    float skipIdx = floor(t * 31.0 + 0.5); // 近いほど 0、遠いほど 31
     float2 step = g_texelSize * (skipIdx + 1.0);
 
     float4 sum = 0.0;
-
     // y = -2
     sum += tex2D(colorSampler, uv + float2(-2, -2) * step) * 1.0;
     sum += tex2D(colorSampler, uv + float2(-1, -2) * step) * 4.0;
