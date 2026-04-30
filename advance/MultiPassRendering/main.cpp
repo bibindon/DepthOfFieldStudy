@@ -15,6 +15,9 @@
 
 #define SAFE_RELEASE(p) { if (p) { (p)->Release(); (p) = NULL; } }
 
+static const int kRenderWidth = 1600;
+static const int kRenderHeight = 900;
+
 LPDIRECT3D9 g_pD3D = NULL;
 LPDIRECT3DDEVICE9 g_pd3dDevice = NULL;
 LPD3DXFONT g_pFont = NULL;
@@ -86,7 +89,7 @@ int WINAPI _tWinMain(_In_ HINSTANCE hInstance,
     assert(atom != 0);
 
     RECT rect;
-    SetRect(&rect, 0, 0, 640, 480);
+    SetRect(&rect, 0, 0, kRenderWidth, kRenderHeight);
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
     rect.right = rect.right - rect.left;
     rect.bottom = rect.bottom - rect.top;
@@ -285,7 +288,7 @@ void InitD3D(HWND hWnd)
 
     // === 変更: RT を 2 枚作成（両方 A8R8G8B8） ===
     hResult = D3DXCreateTexture(g_pd3dDevice,
-                                640, 480,
+                                kRenderWidth, kRenderHeight,
                                 1,
                                 D3DUSAGE_RENDERTARGET,
                                 D3DFMT_A8R8G8B8,
@@ -294,7 +297,7 @@ void InitD3D(HWND hWnd)
     assert(hResult == S_OK);
 
     hResult = D3DXCreateTexture(g_pd3dDevice,
-                                640, 480,
+                                kRenderWidth, kRenderHeight,
                                 1,
                                 D3DUSAGE_RENDERTARGET,
                                 D3DFMT_A8R8G8B8,
@@ -381,7 +384,7 @@ void RenderPass1()
 
         D3DXMatrixPerspectiveFovLH(&Proj,
                                    D3DXToRadian(45.0f),
-                                   640.0f / 480.0f,
+                                   static_cast<float>(kRenderWidth) / static_cast<float>(kRenderHeight),
                                    0.5f,
                                    1000.0f);
     }
@@ -605,8 +608,8 @@ void DrawFullscreenQuad()
 {
     QuadVertex v[4] { };
 
-    float du = 0.5f / 640.f;
-    float dv = 0.5f / 480.f;
+    float du = 0.5f / static_cast<float>(kRenderWidth);
+    float dv = 0.5f / static_cast<float>(kRenderHeight);
 
     v[0].x = -1.0f; v[0].y = -1.0f; v[0].z = 0.0f; v[0].w = 1.0f; v[0].u = 0.0f + du; v[0].v = 1.0f - dv;
     v[1].x = -1.0f; v[1].y = 1.0f; v[1].z = 0.0f; v[1].w = 1.0f; v[1].u = 0.0f + du; v[1].v = 0.0f + dv;

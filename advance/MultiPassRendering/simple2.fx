@@ -2,7 +2,7 @@
 // 深度を見て「ぼけが発生しない深度（焦点付近）」のサンプルは捨てる
 // COLOR0: color, COLOR1: depth (near=0, far=1)
 
-float2 g_texelSize = float2(1.0 / 640.0, 1.0 / 480.0);
+float2 g_texelSize = float2(1.0 / 1600.0, 1.0 / 900.0);
 
 // 入力カラー
 texture texture1;
@@ -77,7 +77,22 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
     }
 
     // 採用タップ数で正規化（最低でも中心の1タップは残る）
-    return sumC / wSum;
+    float4 outColor = sumC / wSum;
+
+    if (true)
+    {
+        float2 pixelPos = uv / texel;
+        float lineX = (frac(pixelPos.x / 5.0) < 0.2) ? 1.0 : 0.0;
+        float lineY = (frac(pixelPos.y / 5.0) < 0.2) ? 1.0 : 0.0;
+        float lineMask = max(lineX, lineY);
+
+        if (lineMask > 0.0)
+        {
+            outColor = float4(0.0, 1.0, 0.0, 1.0);
+        }
+    }
+
+    return outColor;
 }
 
 technique Technique1
