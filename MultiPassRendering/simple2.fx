@@ -1,21 +1,22 @@
-// simple2.fx : single-pass 5x5 Gaussian blur
-// depth-driven skip (0..31) where step = (skip+1) * texel
+// simple2.fx : single-pass 5x5 BOX blur (all weights = 1)
+// 深度を見て「ぼけが発生しない深度（焦点付近）」のサンプルは捨てる
+// COLOR0: color, COLOR1: depth (near=0, far=1)
 
 float2 g_texelSize = float2(1.0 / 640.0, 1.0 / 480.0);
 
-// 入力カラー（RT0）
+// 入力カラー
 texture texture1;
 sampler colorSampler = sampler_state
 {
     Texture = (texture1);
     MipFilter = NONE;
-    MinFilter = LINEAR;
-    MagFilter = LINEAR;
+    MinFilter = POINT;
+    MagFilter = POINT;
     AddressU = CLAMP;
     AddressV = CLAMP;
 };
 
-// 深度（RT1: 近=0, 遠=1）
+// 入力深度（0..1, 近=0 / 遠=1）
 texture textureDepth;
 sampler depthSampler = sampler_state
 {
@@ -27,9 +28,13 @@ sampler depthSampler = sampler_state
     AddressV = CLAMP;
 };
 
-// DOF パラメータ
-float focalDepth = 0.955; // ピント位置（0..1）
-float cocRange = 0.045; // |d - focalDepth| がこの値で最大ぼけ（skip=31）
+// ※数値は変えないで保持（要求どおり）
+float focalDepth = 0.955;
+float cocRange = 0.045;
+
+// 「焦点付近」とみなす幅（半幅）。必要なら微調整用の新パラメータ
+// 例: 0.004〜0.010 あたりで調整。既定は 0.006。
+float inFocusBand = 0.006;
 
 void VS(
     in float4 inPos : POSITION,
@@ -41,57 +46,38 @@ void VS(
     outUV = inUV;
 }
 
-// 5x5 Gaussian kernel = [1 4 6 4 1] ⊗ [1 4 6 4 1] / 256
-float4 PS(
-    in float4 pos : POSITION,
-    in float2 uv : TEXCOORD0) : COLOR
+float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
 {
-    // ---- 深度→skip(0..31) ----
-    float d = tex2D(depthSampler, uv).r; // 近=0, 遠=1
-    float coc = abs(d - focalDepth); // blur 指標
-    float t = saturate(coc / max(cocRange, 1e-6)); // 0..1
-    // 32 段階に量子化（0..31）
-    //float skipIdx = floor(t * 15.0 + 0.5); // 近いほど 0、遠いほど 31
-    float skipIdx = floor(t * 7.0 + 0.5); // 近いほど 0、遠いほど 31
-    float2 step = g_texelSize * (skipIdx);
+    float2 texel = g_texelSize;
 
-    float4 sum = 0.0;
-    // y = -2
-    sum += tex2D(colorSampler, uv + float2(-2, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, -2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, -2) * step) * 1.0;
+    // 中心は必ず採用（ぼけなし領域でもそのまま表示できるように）
+    float4 sumC = tex2D(colorSampler, uv);
+    float wSum = 1.0;
 
-    // y = -1
-    sum += tex2D(colorSampler, uv + float2(-2, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, -1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, -1) * step) * 1.0;
+    // 5x5 ボックス。各タップで「焦点付近なら捨てる」
+    [unroll]
+    for (int j = -3; j <= 3; ++j)
+    {
+        [unroll]
+        for (int i = -3; i <= 3; ++i)
+        {
+            if (i == 0 && j == 0)
+                continue; // 中心は上で加算済み
 
-    // y = 0
-    sum += tex2D(colorSampler, uv + float2(-2, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, 0) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, 0) * step) * 1.0;
+            float2 o = float2((float) i, (float) j) * texel;
+            float ds = tex2D(depthSampler, uv + o).r;
 
-    // y = +1
-    sum += tex2D(colorSampler, uv + float2(-2, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, 1) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, 1) * step) * 1.0;
+            // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
+            float m = (abs(ds - focalDepth) > inFocusBand) ? 1.0 : 0.0;
 
-    // y = +2
-    sum += tex2D(colorSampler, uv + float2(-2, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(-1, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(0, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(1, 2) * step) * 1.0;
-    sum += tex2D(colorSampler, uv + float2(2, 2) * step) * 1.0;
+            float4 cs = tex2D(colorSampler, uv + o);
+            sumC += cs * m;
+            wSum += m;
+        }
+    }
 
-    return saturate(sum / 25.0);
+    // 採用タップ数で正規化（最低でも中心の1タップは残る）
+    return sumC / wSum;
 }
 
 technique Technique1
