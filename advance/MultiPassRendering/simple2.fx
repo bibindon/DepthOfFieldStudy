@@ -36,6 +36,7 @@ float cocRange = 0.045;
 // 例: 0.004〜0.010 あたりで調整。既定は 0.006。
 float inFocusBand = 0.006;
 float blurStrength = 1.0;
+float g_dofBlend = 1.0;
 
 void VS(
     in float4 inPos : POSITION,
@@ -51,9 +52,10 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
 {
     float2 texel = g_texelSize;
     float2 sampleUv = uv + texel * 0.5;
+    float4 baseColor = tex2D(colorSampler, sampleUv);
 
     // 中心は必ず採用（ぼけなし領域でもそのまま表示できるように）
-    float4 sumC = tex2D(colorSampler, sampleUv);
+    float4 sumC = baseColor;
     float wSum = 1.0;
 
     // 5x5 ボックス。各タップで「焦点付近なら捨てる」
@@ -95,7 +97,7 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
         }
     }
 
-    return outColor;
+    return lerp(baseColor, outColor, saturate(g_dofBlend));
 }
 
 technique Technique1

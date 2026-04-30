@@ -11,6 +11,7 @@
 #include <tchar.h>
 #include <cassert>
 #include <crtdbg.h>
+#include <cfloat>
 #include <vector>
 
 #define SAFE_RELEASE(p) { if (p) { (p)->Release(); (p) = NULL; } }
@@ -42,6 +43,12 @@ LPDIRECT3DVERTEXDECLARATION9 g_pQuadDecl = NULL;
 
 // 追加: スプライト
 LPD3DXSPRITE g_pSprite = NULL;
+float g_centerObjectDistance = FLT_MAX;
+float g_dofActivationDistance = 7.5f;
+float g_dofCenterRadiusNdc = 0.35f;
+float g_dofBlend = 0.0f;
+float g_dofBlendSpeed = 2.5f;
+DWORD g_lastFrameTick = 0;
 
 struct QuadVertex
 {
@@ -345,6 +352,7 @@ void Cleanup()
 void RenderPass1()
 {
     HRESULT hr;
+    g_centerObjectDistance = FLT_MAX;
 
     // 現在の RT0 を保存（後で復帰）
     LPDIRECT3DSURFACE9 oldRT0 = NULL;
@@ -374,10 +382,19 @@ void RenderPass1()
     assert(hr == S_OK);
 
     // カメラ行列（簡単な周回）
-    float t = GetTickCount() * (1.0f / 1000.0f);
-    D3DXMATRIX View, Proj;
+    DWORD currentTick = GetTickCount();
+    float deltaTime = 0.0f;
+    if (g_lastFrameTick != 0)
     {
-        D3DXVECTOR3 eye(10.0f * sinf(0.5f * t), 6.0f, -10.0f * cosf(0.5f * t));
+        deltaTime = (currentTick - g_lastFrameTick) * (1.0f / 1000.0f);
+    }
+    g_lastFrameTick = currentTick;
+
+    float t = currentTick * (1.0f / 1000.0f);
+    D3DXMATRIX View, Proj;
+    D3DXVECTOR3 eye;
+    {
+        eye = D3DXVECTOR3(10.0f * sinf(0.5f * t), 6.0f, -10.0f * cosf(0.5f * t));
         D3DXVECTOR3 at(0, 0, 0);
         D3DXVECTOR3 up(0, 1, 0);
         D3DXMatrixLookAtLH(&View, &eye, &at, &up);
@@ -388,6 +405,7 @@ void RenderPass1()
                                    0.5f,
                                    1000.0f);
     }
+    D3DXMATRIX viewProj = View * Proj;
 
     // 描画開始
     hr = g_pd3dDevice->BeginScene();                         assert(hr == S_OK);
@@ -409,13 +427,35 @@ void RenderPass1()
     {
         for (int gx = -gridN / 2; gx <= gridN / 2; ++gx)
         {
+            D3DXVECTOR3 objectCenter(gx * spacing, 0.0f, gz * spacing);
+            D3DXVECTOR3 toObject = objectCenter - eye;
+            float objectDistance = D3DXVec3Length(&toObject);
+
+            D3DXVECTOR4 objectCenter4(objectCenter.x, objectCenter.y, objectCenter.z, 1.0f);
+            D3DXVECTOR4 clipPos;
+            D3DXVec4Transform(&clipPos, &objectCenter4, &viewProj);
+
+            if (clipPos.w > 0.0f)
+            {
+                float ndcX = clipPos.x / clipPos.w;
+                float ndcY = clipPos.y / clipPos.w;
+                bool isNearScreenCenter =
+                    fabsf(ndcX) <= g_dofCenterRadiusNdc &&
+                    fabsf(ndcY) <= g_dofCenterRadiusNdc;
+
+                if (isNearScreenCenter && objectDistance < g_centerObjectDistance)
+                {
+                    g_centerObjectDistance = objectDistance;
+                }
+            }
+
             // ワールド行列：回転＋平行移動
             D3DXMATRIX rotY, trans, world, wvp;
             D3DXMatrixRotationY(&rotY, 0.6f * t + 0.2f * float(gx + gz));
             D3DXMatrixTranslation(&trans,
-                                  gx * spacing,
-                                  0.0f,
-                                  gz * spacing);
+                                  objectCenter.x,
+                                  objectCenter.y,
+                                  objectCenter.z);
             world = rotY * trans;
 
             // WVP をセット
@@ -439,6 +479,17 @@ void RenderPass1()
     hr = g_pEffect1->End();                                  assert(hr == S_OK);
 
     hr = g_pd3dDevice->EndScene();                           assert(hr == S_OK);
+
+    float dofTarget = (g_centerObjectDistance < g_dofActivationDistance) ? 1.0f : 0.0f;
+    float blendStep = g_dofBlendSpeed * deltaTime;
+    if (g_dofBlend < dofTarget)
+    {
+        g_dofBlend = min(g_dofBlend + blendStep, dofTarget);
+    }
+    else
+    {
+        g_dofBlend = max(g_dofBlend - blendStep, dofTarget);
+    }
 
     // MRT を解除して RT0 を復帰
     g_pd3dDevice->SetRenderTarget(1, NULL);
@@ -571,6 +622,7 @@ void RenderPass2()
 
     hResult = g_pEffect2->SetTexture("texture1", g_pRenderTarget); assert(hResult == S_OK);
     hResult = g_pEffect2->SetTexture("textureDepth", g_pRenderTarget2); assert(hResult == S_OK);
+    hResult = g_pEffect2->SetFloat("g_dofBlend", g_dofBlend); assert(hResult == S_OK);
     hResult = g_pEffect2->CommitChanges();                          assert(hResult == S_OK);
 
     DrawFullscreenQuad();
