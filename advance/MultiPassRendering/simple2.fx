@@ -79,6 +79,12 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
                 continue; // 中心は上で加算済み
 
             float2 o = float2((float) i, (float) j) * texel * blurRadiusPixels;
+            float sampleDistanceMeters = tex2D(depthSampler, sampleUv + o).r;
+
+            if (abs(sampleDistanceMeters - focalDistanceMeters) <= focusBandHalfWidthMeters)
+            {
+                continue;
+            }
 
             // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
 
