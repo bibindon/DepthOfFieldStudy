@@ -44,12 +44,16 @@ LPDIRECT3DVERTEXDECLARATION9 g_pQuadDecl = NULL;
 // 追加: スプライト
 LPD3DXSPRITE g_pSprite = NULL;
 float g_centerObjectDistance = FLT_MAX;
-float g_dofActivationDistance = 7.5f;
+float g_dofActivationDistance = 10.0f;
 float g_dofCenterRadiusNdc = 0.35f;
 float g_dofBlend = 0.0f;
 float g_dofBlendSpeed = 2.5f;
 DWORD g_lastFrameTick = 0;
 bool g_isCenterObjectDetected = false;
+bool g_isDofEnabled = true;
+float g_demoObjectLateralOffset = 4.5f;
+DWORD g_demoStateStartTick = 0;
+int g_demoMoveState = 0;
 
 struct QuadVertex
 {
@@ -385,6 +389,10 @@ void RenderPass1()
 
     // カメラ行列（簡単な周回）
     DWORD currentTick = GetTickCount();
+    if (g_demoStateStartTick == 0)
+    {
+        g_demoStateStartTick = currentTick;
+    }
     float deltaTime = 0.0f;
     if (g_lastFrameTick != 0)
     {
@@ -488,8 +496,62 @@ void RenderPass1()
     // 画面中心付近を横切る近距離オブジェクト。
     // 中央を通過したときだけ被写界深度が有効になり、滑らかな遷移を確認しやすくする。
     {
+        const DWORD kHoldRightMs = 2000;
+        const DWORD kMoveToCenterMs = 2000;
+        const DWORD kHoldCenterMs = 2000;
+        const DWORD kMoveToRightMs = 2000;
+        const float kStartLateralOffset = 4.5f;
+
+        DWORD stateElapsed = currentTick - g_demoStateStartTick;
+        switch (g_demoMoveState)
+        {
+        case 0:
+            g_demoObjectLateralOffset = kStartLateralOffset;
+            if (stateElapsed >= kHoldRightMs)
+            {
+                g_demoMoveState = 1;
+                g_demoStateStartTick = currentTick;
+            }
+            break;
+        case 1:
+        {
+            float tMove = min(1.0f, stateElapsed / static_cast<float>(kMoveToCenterMs));
+            g_demoObjectLateralOffset = kStartLateralOffset * (1.0f - tMove);
+            if (stateElapsed >= kMoveToCenterMs)
+            {
+                g_demoMoveState = 2;
+                g_demoStateStartTick = currentTick;
+                g_demoObjectLateralOffset = 0.0f;
+            }
+            break;
+        }
+        case 2:
+            g_demoObjectLateralOffset = 0.0f;
+            if (stateElapsed >= kHoldCenterMs)
+            {
+                g_demoMoveState = 3;
+                g_demoStateStartTick = currentTick;
+            }
+            break;
+        case 3:
+        {
+            float tMove = min(1.0f, stateElapsed / static_cast<float>(kMoveToRightMs));
+            g_demoObjectLateralOffset = kStartLateralOffset * tMove;
+            if (stateElapsed >= kMoveToRightMs)
+            {
+                g_demoMoveState = 4;
+                g_demoStateStartTick = currentTick;
+                g_demoObjectLateralOffset = kStartLateralOffset;
+            }
+            break;
+        }
+        default:
+            g_demoObjectLateralOffset = kStartLateralOffset;
+            break;
+        }
+
         D3DXVECTOR3 demoObjectCenter =
-            eye + forward * 8.0f + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
+            eye + forward * 8.0f + right * g_demoObjectLateralOffset + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
         D3DXVECTOR3 toObject = demoObjectCenter - eye;
         float objectDistance = D3DXVec3Length(&toObject);
 
@@ -538,7 +600,8 @@ void RenderPass1()
 
     hr = g_pd3dDevice->EndScene();                           assert(hr == S_OK);
 
-    float dofTarget = (g_centerObjectDistance < g_dofActivationDistance) ? 1.0f : 0.0f;
+    float dofTarget =
+        (g_isDofEnabled && g_centerObjectDistance < g_dofActivationDistance) ? 1.0f : 0.0f;
     float blendStep = g_dofBlendSpeed * deltaTime;
     if (g_dofBlend < dofTarget)
     {
@@ -690,7 +753,8 @@ void RenderPass2()
 
     TCHAR msg[256];
     _stprintf_s(msg,
-                _T("DOF Blend: %.2f  Center Object: %s  Distance: %.2f"),
+                _T("DOF: %s  Blend: %.2f  Center Object: %s  Distance: %.2f"),
+                g_isDofEnabled ? _T("ON") : _T("OFF"),
                 g_dofBlend,
                 g_isCenterObjectDetected ? _T("ON") : _T("OFF"),
                 g_isCenterObjectDetected ? g_centerObjectDistance : 0.0f);
@@ -742,6 +806,15 @@ LRESULT WINAPI MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
+    case WM_KEYDOWN:
+    {
+        if (wParam == '1')
+        {
+            g_isDofEnabled = !g_isDofEnabled;
+            return 0;
+        }
+        break;
+    }
     case WM_DESTROY:
     {
         PostQuitMessage(0);
