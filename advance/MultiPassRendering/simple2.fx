@@ -1,10 +1,10 @@
-// simple2.fx : single-pass 5x5 BOX blur (all weights = 1)
-// 深度を見て「ぼけが発生しない深度（焦点付近）」のサンプルは捨てる
-// COLOR0: color, COLOR1: depth (near=0, far=1)
+// simple2.fx:
+// 1 パス目で作ったカラーと距離テクスチャを使い、
+// 中心画素がピント外のときだけポストエフェクトでぼかす。
 
 float2 g_texelSize = float2(1.0 / 1600.0, 1.0 / 900.0);
 
-// 入力カラー
+// 入力カラー。
 texture texture1;
 sampler colorSampler = sampler_state
 {
@@ -16,7 +16,8 @@ sampler colorSampler = sampler_state
     AddressV = CLAMP;
 };
 
-// 入力深度（0..1, 近=0 / 遠=1）
+// 入力距離テクスチャ。
+// simple.fx が COLOR1 の R 成分へ書いた距離を読む。
 texture textureDepth;
 sampler depthSampler = sampler_state
 {
@@ -28,12 +29,16 @@ sampler depthSampler = sampler_state
     AddressV = CLAMP;
 };
 
+// ピント中心距離。単位はメートル扱い。
 float focalDistanceMeters = 6.5;
+
+// ピントが合っているとみなす距離帯の半幅。単位はメートル。
 float focusBandHalfWidthMeters = 2.0;
 
-// 「焦点付近」とみなす幅（半幅）。必要なら微調整用の新パラメータ
-// 例: 0.004〜0.010 あたりで調整。既定は 0.006。
+// ぼかし半径。これは距離ではなく画面上のピクセル半径。
 float blurRadiusPixels = 1.0;
+
+// C++ 側で制御する DOF の適用率。
 float g_dofBlend = 1.0;
 
 void VS(
@@ -46,6 +51,7 @@ void VS(
     outUV = inUV;
 }
 
+// 奇数前提のサンプルサイズ。
 #define GaussSampleSize 11
 
 float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
@@ -55,18 +61,15 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
     float4 baseColor = tex2D(colorSampler, sampleUv);
     float centerDistanceMeters = tex2D(depthSampler, sampleUv).r;
 
+    // 中心画素がピント内なら、その画素はぼかさない。
     if (abs(centerDistanceMeters - focalDistanceMeters) <= focusBandHalfWidthMeters)
     {
         return baseColor;
     }
 
-    // 中心は必ず採用（ぼけなし領域でもそのまま表示できるように）
+    // 中心画素がピント外のときだけ周囲を平均する。
     float4 sumC = baseColor;
     float wSum = 1.0;
-
-    // 各タップで「焦点付近なら捨てる」
-
-    // 奇数
 
     const int GaussSampleSizeHalf = GaussSampleSize / 2;
     [unroll]
@@ -76,17 +79,16 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
         for (int i = -GaussSampleSizeHalf; i <= GaussSampleSizeHalf; ++i)
         {
             if (i == 0 && j == 0)
-                continue; // 中心は上で加算済み
+                continue;
 
             float2 o = float2((float) i, (float) j) * texel * blurRadiusPixels;
             float sampleDistanceMeters = tex2D(depthSampler, sampleUv + o).r;
 
+            // 本来くっきり表示されるサンプルは混ぜない。
             if (abs(sampleDistanceMeters - focalDistanceMeters) <= focusBandHalfWidthMeters)
             {
                 continue;
             }
-
-            // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
 
             float4 cs = tex2D(colorSampler, sampleUv + o);
             sumC += cs;
@@ -94,10 +96,10 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
         }
     }
 
-    // 採用タップ数で正規化（最低でも中心の1タップは残る）
     float4 outColor = sumC / wSum;
 
     // デバッグ用。
+    // true にすると 5 ピクセルおきの緑グリッドを表示する。
     if (false)
     {
         float2 pixelPos = sampleUv / texel;
@@ -111,6 +113,7 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
         }
     }
 
+    // 最終的な DOF 強度を C++ 側のブレンド値で制御する。
     return lerp(baseColor, outColor, saturate(g_dofBlend));
 }
 

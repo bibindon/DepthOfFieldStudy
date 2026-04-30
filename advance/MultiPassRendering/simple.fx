@@ -14,7 +14,9 @@ sampler textureSampler = sampler_state
     MagFilter = NONE;
 };
 
-// ▼ 頂点シェーダー：clip空間の z/w を 0..1 にして渡す（非線形だが追加定数なしで簡単）
+// 1 パス目の頂点シェーダー。
+// COLOR0 用の UV をそのまま渡しつつ、
+// COLOR1 用にカメラからの距離をメートル扱いで計算して次段へ渡す。
 void VertexShader1(
     in float4 inPosition : POSITION,
     in float3 inNormal : NORMAL,
@@ -28,11 +30,13 @@ void VertexShader1(
     outPosition = clipPosition;
     outTexCoord0 = inTexCoord0;
 
-    // 0..1（近=0, 遠=1）
+    // ビュー空間の原点はカメラ位置なので、その長さを距離として使う。
     outDistanceMeters = length(viewPosition.xyz);
 }
 
-// ▼ ピクセルシェーダー：MRTのCOLOR1にグレースケールで深度を書き込む
+// 1 パス目のピクセルシェーダー。
+// COLOR0 にはカラーを、COLOR1 の R 成分には距離を書き出す。
+// 距離テクスチャの実体は R32F だが、COLOR1 自体は float4 で返す必要がある。
 void PixelShaderMRT(
     in float2 inTexCoord0 : TEXCOORD0,
     in float inDistanceMeters : TEXCOORD1,
@@ -47,12 +51,11 @@ void PixelShaderMRT(
     }
 
     outColor0 = baseColor;
-
-    // 近いほど黒、遠いほど白
     outColor1 = float4(inDistanceMeters, 0.0, 0.0, 0.0);
 }
 
-// ==== 追加: MRT を使うテクニック ====
+// 1 パス目:
+// カラーと距離を MRT へ同時に書き出す。
 technique TechniqueMRT
 {
     pass P0
