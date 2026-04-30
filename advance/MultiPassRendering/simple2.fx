@@ -35,6 +35,7 @@ float cocRange = 0.045;
 // 「焦点付近」とみなす幅（半幅）。必要なら微調整用の新パラメータ
 // 例: 0.004〜0.010 あたりで調整。既定は 0.006。
 float inFocusBand = 0.006;
+float blurStrength = 1.0;
 
 void VS(
     in float4 inPos : POSITION,
@@ -65,7 +66,7 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
             if (i == 0 && j == 0)
                 continue; // 中心は上で加算済み
 
-            float2 o = float2((float) i, (float) j) * texel;
+            float2 o = float2((float) i, (float) j) * texel * blurStrength;
             float ds = tex2D(depthSampler, sampleUv + o).r;
 
             // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
