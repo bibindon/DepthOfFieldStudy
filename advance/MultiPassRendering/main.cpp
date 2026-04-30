@@ -396,7 +396,7 @@ void RenderPass1()
     D3DXMATRIX View, Proj;
     D3DXVECTOR3 eye;
     {
-        eye = D3DXVECTOR3(10.0f * sinf(0.5f * t), 6.0f, -10.0f * cosf(0.5f * t));
+        eye = D3DXVECTOR3(0.0f, 6.0f, -10.0f);
         D3DXVECTOR3 at(0, 0, 0);
         D3DXVECTOR3 up(0, 1, 0);
         D3DXMatrixLookAtLH(&View, &eye, &at, &up);
@@ -461,7 +461,7 @@ void RenderPass1()
 
             // ワールド行列：回転＋平行移動
             D3DXMATRIX rotY, trans, world, wvp;
-            D3DXMatrixRotationY(&rotY, 0.6f * t + 0.2f * float(gx + gz));
+            D3DXMatrixIdentity(&rotY);
             D3DXMatrixTranslation(&trans,
                                   objectCenter.x,
                                   objectCenter.y,
@@ -488,9 +488,8 @@ void RenderPass1()
     // 画面中心付近を横切る近距離オブジェクト。
     // 中央を通過したときだけ被写界深度が有効になり、滑らかな遷移を確認しやすくする。
     {
-        float lateralOffset = sinf(t * 0.9f) * 4.5f;
         D3DXVECTOR3 demoObjectCenter =
-            eye + forward * 4.0f + right * lateralOffset + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
+            eye + forward * 8.0f + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
         D3DXVECTOR3 toObject = demoObjectCenter - eye;
         float objectDistance = D3DXVec3Length(&toObject);
 
@@ -515,7 +514,7 @@ void RenderPass1()
 
         D3DXMATRIX demoScale, demoRotY, demoTrans, demoWorld, demoWvp;
         D3DXMatrixScaling(&demoScale, 1.4f, 1.4f, 1.4f);
-        D3DXMatrixRotationY(&demoRotY, -1.3f * t);
+        D3DXMatrixIdentity(&demoRotY);
         D3DXMatrixTranslation(&demoTrans,
                               demoObjectCenter.x,
                               demoObjectCenter.y,
