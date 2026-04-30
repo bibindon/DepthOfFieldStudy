@@ -28,13 +28,12 @@ sampler depthSampler = sampler_state
     AddressV = CLAMP;
 };
 
-float focalDepth = 0.9138;
-float cocRange = 0.045;
+float focalDistanceMeters = 6.5;
+float focusBandHalfWidthMeters = 2.0;
 
 // 「焦点付近」とみなす幅（半幅）。必要なら微調整用の新パラメータ
 // 例: 0.004〜0.010 あたりで調整。既定は 0.006。
-float inFocusBand = 0.02;
-float blurStrength = 1.0;
+float blurRadiusPixels = 1.0;
 float g_dofBlend = 1.0;
 
 void VS(
@@ -52,9 +51,9 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
     float2 texel = g_texelSize;
     float2 sampleUv = uv + texel * 0.5;
     float4 baseColor = tex2D(colorSampler, sampleUv);
-    float centerDepth = tex2D(depthSampler, sampleUv).r;
+    float centerDistanceMeters = tex2D(depthSampler, sampleUv).r;
 
-    if (abs(centerDepth - focalDepth) <= inFocusBand)
+    if (abs(centerDistanceMeters - focalDistanceMeters) <= focusBandHalfWidthMeters)
     {
         return baseColor;
     }
@@ -73,7 +72,7 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
             if (i == 0 && j == 0)
                 continue; // 中心は上で加算済み
 
-            float2 o = float2((float) i, (float) j) * texel * blurStrength;
+            float2 o = float2((float) i, (float) j) * texel * blurRadiusPixels;
 
             // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
 

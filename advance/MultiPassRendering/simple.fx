@@ -1,4 +1,5 @@
 float4x4 g_matWorldViewProj;
+float4x4 g_matWorldView;
 float4 g_lightNormal = { 0.3f, 1.0f, 0.5f, 0.0f };
 float3 g_ambient = { 0.3f, 0.3f, 0.3f };
 
@@ -20,21 +21,21 @@ void VertexShader1(
     in float2 inTexCoord0 : TEXCOORD0,
     out float4 outPosition : POSITION0,
     out float2 outTexCoord0 : TEXCOORD0,
-    out float outDepth01 : TEXCOORD1)
+    out float outDistanceMeters : TEXCOORD1)
 {
     float4 clipPosition = mul(inPosition, g_matWorldViewProj);
+    float4 viewPosition = mul(inPosition, g_matWorldView);
     outPosition = clipPosition;
     outTexCoord0 = inTexCoord0;
 
     // 0..1（近=0, 遠=1）
-    float depthNdc = clipPosition.z / clipPosition.w;
-    outDepth01 = saturate(depthNdc);
+    outDistanceMeters = length(viewPosition.xyz);
 }
 
 // ▼ ピクセルシェーダー：MRTのCOLOR1にグレースケールで深度を書き込む
 void PixelShaderMRT(
     in float2 inTexCoord0 : TEXCOORD0,
-    in float inDepth01 : TEXCOORD1,
+    in float inDistanceMeters : TEXCOORD1,
     out float4 outColor0 : COLOR0,
     out float4 outColor1 : COLOR1)
 {
@@ -48,8 +49,7 @@ void PixelShaderMRT(
     outColor0 = baseColor;
 
     // 近いほど黒、遠いほど白
-    float d = inDepth01;
-    outColor1 = float4(d, d, d, 1.0);
+    outColor1 = float4(inDistanceMeters, 0.0, 0.0, 0.0);
 }
 
 // ==== 追加: MRT を使うテクニック ====

@@ -312,7 +312,7 @@ void InitD3D(HWND hWnd)
                                 kRenderWidth, kRenderHeight,
                                 1,
                                 D3DUSAGE_RENDERTARGET,
-                                D3DFMT_A8R8G8B8,
+                                D3DFMT_R32F,
                                 D3DPOOL_DEFAULT,
                                 &g_pRenderTarget2);
     assert(hResult == S_OK);
@@ -468,17 +468,19 @@ void RenderPass1()
             }
 
             // ワールド行列：回転＋平行移動
-            D3DXMATRIX rotY, trans, world, wvp;
+            D3DXMATRIX rotY, trans, world, worldView, wvp;
             D3DXMatrixIdentity(&rotY);
             D3DXMatrixTranslation(&trans,
                                   objectCenter.x,
                                   objectCenter.y,
                                   objectCenter.z);
             world = rotY * trans;
+            worldView = world * View;
 
             // WVP をセット
             wvp = world * View * Proj;
             hr = g_pEffect1->SetMatrix("g_matWorldViewProj", &wvp); assert(hr == S_OK);
+            hr = g_pEffect1->SetMatrix("g_matWorldView", &worldView); assert(hr == S_OK);
 
             // メッシュの全サブセットを描画（マテリアル/テクスチャ適用）
             for (DWORD i = 0; i < g_dwNumMaterials; ++i)
@@ -574,7 +576,7 @@ void RenderPass1()
             }
         }
 
-        D3DXMATRIX demoScale, demoRotY, demoTrans, demoWorld, demoWvp;
+        D3DXMATRIX demoScale, demoRotY, demoTrans, demoWorld, demoWorldView, demoWvp;
         D3DXMatrixScaling(&demoScale, 1.0f, 1.0f, 1.0f);
         D3DXMatrixIdentity(&demoRotY);
         D3DXMatrixTranslation(&demoTrans,
@@ -582,8 +584,10 @@ void RenderPass1()
                               demoObjectCenter.y,
                               demoObjectCenter.z);
         demoWorld = demoScale * demoRotY * demoTrans;
+        demoWorldView = demoWorld * View;
         demoWvp = demoWorld * View * Proj;
         hr = g_pEffect1->SetMatrix("g_matWorldViewProj", &demoWvp); assert(hr == S_OK);
+        hr = g_pEffect1->SetMatrix("g_matWorldView", &demoWorldView); assert(hr == S_OK);
 
         for (DWORD i = 0; i < g_dwNumMaterials; ++i)
         {
