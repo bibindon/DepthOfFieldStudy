@@ -439,12 +439,12 @@ void RenderPass1()
 
     // ====== グリッド配置で複数描画 ======
     const int   gridN = 7;      // 7x7 = 49個
-    const float spacing = 3.5f;   // 間隔
+    const float spacing = 4.5f;   // 間隔
     for (int gz = -gridN / 2; gz <= gridN / 2; ++gz)
     {
         for (int gx = -gridN / 2; gx <= gridN / 2; ++gx)
         {
-            D3DXVECTOR3 objectCenter(gx * spacing, 0.0f, gz * spacing);
+            D3DXVECTOR3 objectCenter(gx * spacing, -3.0f, gz * spacing);
             D3DXVECTOR3 toObject = objectCenter - eye;
             float objectDistance = D3DXVec3Length(&toObject);
 
@@ -551,7 +551,7 @@ void RenderPass1()
         }
 
         D3DXVECTOR3 demoObjectCenter =
-            eye + forward * 8.0f + right * g_demoObjectLateralOffset + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
+            eye + forward * 6.5f + right * g_demoObjectLateralOffset + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
         D3DXVECTOR3 toObject = demoObjectCenter - eye;
         float objectDistance = D3DXVec3Length(&toObject);
 
@@ -575,7 +575,7 @@ void RenderPass1()
         }
 
         D3DXMATRIX demoScale, demoRotY, demoTrans, demoWorld, demoWvp;
-        D3DXMatrixScaling(&demoScale, 1.4f, 1.4f, 1.4f);
+        D3DXMatrixScaling(&demoScale, 1.0f, 1.0f, 1.0f);
         D3DXMatrixIdentity(&demoRotY);
         D3DXMatrixTranslation(&demoTrans,
                               demoObjectCenter.x,
