@@ -49,9 +49,10 @@ void VS(
 float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
 {
     float2 texel = g_texelSize;
+    float2 sampleUv = uv + texel * 0.5;
 
     // 中心は必ず採用（ぼけなし領域でもそのまま表示できるように）
-    float4 sumC = tex2D(colorSampler, uv);
+    float4 sumC = tex2D(colorSampler, sampleUv);
     float wSum = 1.0;
 
     // 5x5 ボックス。各タップで「焦点付近なら捨てる」
@@ -65,12 +66,12 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
                 continue; // 中心は上で加算済み
 
             float2 o = float2((float) i, (float) j) * texel;
-            float ds = tex2D(depthSampler, uv + o).r;
+            float ds = tex2D(depthSampler, sampleUv + o).r;
 
             // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
             float m = (abs(ds - focalDepth) > inFocusBand) ? 1.0 : 0.0;
 
-            float4 cs = tex2D(colorSampler, uv + o);
+            float4 cs = tex2D(colorSampler, sampleUv + o);
             sumC += cs * m;
             wSum += m;
         }
@@ -79,9 +80,10 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
     // 採用タップ数で正規化（最低でも中心の1タップは残る）
     float4 outColor = sumC / wSum;
 
-    if (true)
+    // デバッグ用。
+    if (false)
     {
-        float2 pixelPos = uv / texel;
+        float2 pixelPos = sampleUv / texel;
         float lineX = (frac(pixelPos.x / 5.0) < 0.2) ? 1.0 : 0.0;
         float lineY = (frac(pixelPos.y / 5.0) < 0.2) ? 1.0 : 0.0;
         float lineMask = max(lineX, lineY);
