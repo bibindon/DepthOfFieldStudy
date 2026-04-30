@@ -28,13 +28,12 @@ sampler depthSampler = sampler_state
     AddressV = CLAMP;
 };
 
-// ※数値は変えないで保持（要求どおり）
-float focalDepth = 0.938;
+float focalDepth = 0.9138;
 float cocRange = 0.045;
 
 // 「焦点付近」とみなす幅（半幅）。必要なら微調整用の新パラメータ
 // 例: 0.004〜0.010 あたりで調整。既定は 0.006。
-float inFocusBand = 0.028;
+float inFocusBand = 0.02;
 float blurStrength = 1.0;
 float g_dofBlend = 1.0;
 
