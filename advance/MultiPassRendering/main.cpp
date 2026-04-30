@@ -539,7 +539,7 @@ void RenderPass1()
             g_demoObjectLateralOffset = kStartLateralOffset * tMove;
             if (stateElapsed >= kMoveToRightMs)
             {
-                g_demoMoveState = 4;
+                g_demoMoveState = 0;
                 g_demoStateStartTick = currentTick;
                 g_demoObjectLateralOffset = kStartLateralOffset;
             }

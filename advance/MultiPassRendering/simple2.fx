@@ -29,12 +29,12 @@ sampler depthSampler = sampler_state
 };
 
 // ※数値は変えないで保持（要求どおり）
-float focalDepth = 0.955;
+float focalDepth = 0.938;
 float cocRange = 0.045;
 
 // 「焦点付近」とみなす幅（半幅）。必要なら微調整用の新パラメータ
 // 例: 0.004〜0.010 あたりで調整。既定は 0.006。
-float inFocusBand = 0.006;
+float inFocusBand = 0.028;
 float blurStrength = 1.0;
 float g_dofBlend = 1.0;
 
@@ -53,6 +53,12 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
     float2 texel = g_texelSize;
     float2 sampleUv = uv + texel * 0.5;
     float4 baseColor = tex2D(colorSampler, sampleUv);
+    float centerDepth = tex2D(depthSampler, sampleUv).r;
+
+    if (abs(centerDepth - focalDepth) <= inFocusBand)
+    {
+        return baseColor;
+    }
 
     // 中心は必ず採用（ぼけなし領域でもそのまま表示できるように）
     float4 sumC = baseColor;
@@ -69,14 +75,12 @@ float4 PS(in float4 pos : POSITION, in float2 uv : TEXCOORD0) : COLOR
                 continue; // 中心は上で加算済み
 
             float2 o = float2((float) i, (float) j) * texel * blurStrength;
-            float ds = tex2D(depthSampler, sampleUv + o).r;
 
             // サンプル側の深度が「焦点付近」なら 0（捨てる）、そうでなければ 1（採用）
-            float m = (abs(ds - focalDepth) > inFocusBand) ? 1.0 : 0.0;
 
             float4 cs = tex2D(colorSampler, sampleUv + o);
-            sumC += cs * m;
-            wSum += m;
+            sumC += cs;
+            wSum += 1.0;
         }
     }
 
