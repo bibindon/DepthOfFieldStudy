@@ -49,6 +49,7 @@ float g_dofCenterRadiusNdc = 0.35f;
 float g_dofBlend = 0.0f;
 float g_dofBlendSpeed = 2.5f;
 DWORD g_lastFrameTick = 0;
+bool g_isCenterObjectDetected = false;
 
 struct QuadVertex
 {
@@ -353,6 +354,7 @@ void RenderPass1()
 {
     HRESULT hr;
     g_centerObjectDistance = FLT_MAX;
+    g_isCenterObjectDetected = false;
 
     // 現在の RT0 を保存（後で復帰）
     LPDIRECT3DSURFACE9 oldRT0 = NULL;
@@ -406,6 +408,13 @@ void RenderPass1()
                                    1000.0f);
     }
     D3DXMATRIX viewProj = View * Proj;
+    D3DXVECTOR3 at(0.0f, 0.0f, 0.0f);
+    D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
+    D3DXVECTOR3 forward = at - eye;
+    D3DXVec3Normalize(&forward, &forward);
+    D3DXVECTOR3 right;
+    D3DXVec3Cross(&right, &up, &forward);
+    D3DXVec3Normalize(&right, &right);
 
     // 描画開始
     hr = g_pd3dDevice->BeginScene();                         assert(hr == S_OK);
@@ -446,6 +455,7 @@ void RenderPass1()
                 if (isNearScreenCenter && objectDistance < g_centerObjectDistance)
                 {
                     g_centerObjectDistance = objectDistance;
+                    g_isCenterObjectDetected = true;
                 }
             }
 
@@ -474,6 +484,55 @@ void RenderPass1()
         }
     }
     // ===================================
+
+    // 画面中心付近を横切る近距離オブジェクト。
+    // 中央を通過したときだけ被写界深度が有効になり、滑らかな遷移を確認しやすくする。
+    {
+        float lateralOffset = sinf(t * 0.9f) * 4.5f;
+        D3DXVECTOR3 demoObjectCenter =
+            eye + forward * 4.0f + right * lateralOffset + D3DXVECTOR3(0.0f, 0.3f, 0.0f);
+        D3DXVECTOR3 toObject = demoObjectCenter - eye;
+        float objectDistance = D3DXVec3Length(&toObject);
+
+        D3DXVECTOR4 objectCenter4(demoObjectCenter.x, demoObjectCenter.y, demoObjectCenter.z, 1.0f);
+        D3DXVECTOR4 clipPos;
+        D3DXVec4Transform(&clipPos, &objectCenter4, &viewProj);
+
+        if (clipPos.w > 0.0f)
+        {
+            float ndcX = clipPos.x / clipPos.w;
+            float ndcY = clipPos.y / clipPos.w;
+            bool isNearScreenCenter =
+                fabsf(ndcX) <= g_dofCenterRadiusNdc &&
+                fabsf(ndcY) <= g_dofCenterRadiusNdc;
+
+            if (isNearScreenCenter && objectDistance < g_centerObjectDistance)
+            {
+                g_centerObjectDistance = objectDistance;
+                g_isCenterObjectDetected = true;
+            }
+        }
+
+        D3DXMATRIX demoScale, demoRotY, demoTrans, demoWorld, demoWvp;
+        D3DXMatrixScaling(&demoScale, 1.4f, 1.4f, 1.4f);
+        D3DXMatrixRotationY(&demoRotY, -1.3f * t);
+        D3DXMatrixTranslation(&demoTrans,
+                              demoObjectCenter.x,
+                              demoObjectCenter.y,
+                              demoObjectCenter.z);
+        demoWorld = demoScale * demoRotY * demoTrans;
+        demoWvp = demoWorld * View * Proj;
+        hr = g_pEffect1->SetMatrix("g_matWorldViewProj", &demoWvp); assert(hr == S_OK);
+
+        for (DWORD i = 0; i < g_dwNumMaterials; ++i)
+        {
+            g_pd3dDevice->SetMaterial(&g_pMaterials[i]);
+            g_pEffect1->SetTexture("texture1", g_pTextures[i]);
+            g_pEffect1->CommitChanges();
+
+            hr = g_pMesh->DrawSubset(i); assert(hr == S_OK);
+        }
+    }
 
     hr = g_pEffect1->EndPass();                              assert(hr == S_OK);
     hr = g_pEffect1->End();                                  assert(hr == S_OK);
@@ -629,6 +688,14 @@ void RenderPass2()
 
     hResult = g_pEffect2->EndPass(); assert(hResult == S_OK);
     hResult = g_pEffect2->End();     assert(hResult == S_OK);
+
+    TCHAR msg[256];
+    _stprintf_s(msg,
+                _T("DOF Blend: %.2f  Center Object: %s  Distance: %.2f"),
+                g_dofBlend,
+                g_isCenterObjectDetected ? _T("ON") : _T("OFF"),
+                g_isCenterObjectDetected ? g_centerObjectDistance : 0.0f);
+    TextDraw(g_pFont, msg, 16, 16);
 
     // === 追加: 左上に RT1 を 1/2 スケールで表示（D3DXSPRITE） ===
     //if (g_pSprite)
